@@ -6,11 +6,11 @@ const redis = require('redis');
 const {promisify} = require('util');
 
 const redisClient = redis.createClient(
-  13190,
-  "redis-13190.c301.ap-south-1-1.ec2.cloud.redislabs.com",
+  14513,
+  "redis-14513.c264.ap-south-1-1.ec2.cloud.redislabs.com",
   { no_ready_check: true }
 );
-redisClient.auth("gkiOIPkytPI3ADi14jHMSWkZEo2J5TDG", function (err) {
+redisClient.auth("Lio9hkOPUbqWD6XintERZYTLHNSWl9xv", function (err) {
   if (err) throw err;
 });
 
@@ -20,7 +20,6 @@ redisClient.on("connect", async function () {
 
 const SET_ASYNC = promisify(redisClient.SET).bind(redisClient);
 const GET_ASYNC = promisify(redisClient.GET).bind(redisClient);
-
 
 const urlValidaton =/^(https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|www\.[a-zA-Z0-9][a-zA-Z0-9-]+[a-zA-Z0-9]\.[^\s]{2,}|https?:\/\/(?:www\.|(?!www))[a-zA-Z0-9]+\.[^\s]{2,}|www\.[a-zA-Z0-9]+\.[^\s]{2,})?$/
 
@@ -33,20 +32,28 @@ const shorternUrl = async function(req, res){
 
           if(!urlValidaton.test(longUrl)) return res.status(400).send({status:false, message:"Please give valid Url "})
 
-          if(!validUrl.isWebUri(longUrl)) return res.status(400).send({status:false, message:"Please give the valide  URL"})
+        const caching = await GET_ASYNC(`${longUrl}`);  //e.g => return  "" /null
 
-        const urlCode = shortId.generate().toLocaleLowerCase();
-        const shortUrl = `http://localhost:3000/${urlCode}`  // http://localhost:3000/dosfiwo
- 
-        const data = await urlModel.findOne({longUrl}).select({_id:0,__v:0,createdAt:0,updatedAt:0});
+        if(caching){
+          let  data = JSON.parse(caching);
+          console.log("from post caching ");     
+          return res.status(200).send({ msg:"succesfull",data})
+        }else{
+          console.log("from post DB ");
 
-        if(data)  return  res.status(200).send({ msg:"succesfull",data})
+          const urlCode = shortId.generate().toLocaleLowerCase();
+          const shortUrl = `http://localhost:3000/${urlCode}`  //e.g => http://localhost:3000/dosfiwo;
 
-        req.body.urlCode =urlCode
-        req.body.shortUrl =shortUrl
 
-        const saveData = await urlModel.create(req.body);
-        return  res.status(201).send({ msg:"succesfull",data:{longUrl:saveData.longUrl,shortUrl:saveData.shortUrl,urlCode:saveData.urlCode}})
+          req.body.urlCode =urlCode 
+          req.body.shortUrl =shortUrl
+          
+          await SET_ASYNC(`${longUrl}`, JSON.stringify(req.body));
+          const saveData = await urlModel.create(req.body);
+          return  res.status(201).send({ msg:"succesfull",data:{longUrl:saveData.longUrl,shortUrl:saveData.shortUrl,urlCode:saveData.urlCode}})
+        }
+
+     
 }
 catch(err){return  res.status(500).send({status:false,message:err.message})}}
 
@@ -58,7 +65,7 @@ try {
 
       const caching = await GET_ASYNC(`${req.params.urlCode}`);
       if(caching){
-        console.log("in caching")
+        console.log("present in caching")
         return res.status(302).redirect(JSON.parse(caching));
       }else{
 
